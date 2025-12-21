@@ -32,7 +32,9 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
     const [myAvailability, setMyAvailability] = useState<Set<string>>(new Set())
     // heatmapCounts[slotId] = number of people available
     const [heatmapCounts, setHeatmapCounts] = useState<Record<string, number>>({})
+    const [heatmapSets, setHeatmapSets] = useState<Record<string, Set<string>>>({})
     const [totalResponders, setTotalResponders] = useState(0)
+    const [matchRate, setMatchRate] = useState<string>("")
 
     const [isDragging, setIsDragging] = useState(false)
     const [dragMode, setDragMode] = useState<'add' | 'remove'>('add')
@@ -89,15 +91,21 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
             if (responderIds.length > 0) {
                 const { data: heat } = await supabase
                     .from('availability')
-                    .select('time_slot_id')
+                    .select('time_slot_id, response_id')
                     .in('response_id', responderIds)
 
                 if (heat) {
                     const counts: Record<string, number> = {}
+                    const sets: Record<string, Set<string>> = {}
+
                     heat.forEach(h => {
                         counts[h.time_slot_id] = (counts[h.time_slot_id] || 0) + 1
+
+                        if (!sets[h.time_slot_id]) sets[h.time_slot_id] = new Set()
+                        sets[h.time_slot_id].add(h.response_id)
                     })
                     setHeatmapCounts(counts)
+                    setHeatmapSets(sets)
                 }
             }
         }
@@ -166,22 +174,8 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
 
         const selectedIds = new Array<string>()
 
-        // Calculate matching count
-        // For matching, we need to know: For EVERY slot in the selection, who is available?
-        // A "Perfect Match" means a set of users who are available for ALL selected slots.
-        // Simplified Match: "Min availability across selection". i.e. If slot A has 3 people, slot B has 2 people, the range has at most 2 people if they overlap.
-        // Accurate Match: Intersection of availability sets for each slot.
-
-        // We need availability sets per slot, not just counts.
-        // Current heatmapCounts is just counts.
-        // We'll trust the parent or just do a naive check if we don't have sets.
-        // REAL IMPLEMENTATION (Ideal):
-        // We need `heatmapSets: Record<string, Set<string>>` (slotId -> Set of userIds)
-        // But for this MVP without major Refactor, let's just use the Min Count approximation or naive average.
-        // Actually, to display "X / Y people", Min Count is the upper bound of possible group size.
-
-        let minCount = 9999
-        let sumCount = 0
+        // Intersection Logic
+        let commonUserIds: Set<string> | null = null
 
         for (let d = minD; d <= maxD; d++) {
             for (let t = minT; t <= maxT; t++) {
@@ -190,16 +184,31 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
                 const slot = gridData[dateKey][timeKey]
                 if (slot) {
                     selectedIds.push(slot.id)
-                    const c = heatmapCounts[slot.id] || 0
-                    if (c < minCount) minCount = c
-                    sumCount += c
+
+                    const slotUsers = heatmapSets[slot.id] || new Set()
+                    if (commonUserIds === null) {
+                        commonUserIds = new Set(slotUsers)
+                    } else {
+                        // Intersection
+                        commonUserIds = new Set(
+                            Array.from(commonUserIds).filter(x => slotUsers.has(x))
+                        )
+                    }
                 }
             }
         }
 
-
         if (selectedIds.length === 0) setAdminSelection(null)
         setAdminSelectedSlots(new Set(selectedIds))
+
+        // Calculate Rate
+        const count = commonUserIds ? commonUserIds.size : 0
+        if (totalResponders > 0) {
+            const pct = Math.round((count / totalResponders) * 100)
+            setMatchRate(`${count} / ${totalResponders} 人 (${pct}%)`)
+        } else {
+            setMatchRate("0 / 0 人 (0%)")
+        }
 
         // Notify parent
         if (onAdminSelect && selectedIds.length > 0) {
@@ -349,7 +358,7 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
             {/* Show matching percentage for Admin Selection */}
             {adminSelectedSlots.size > 0 && adminSelection && (
                 <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-pink-600 text-white px-4 py-2 rounded-full shadow-lg font-bold text-sm z-50 animate-in fade-in slide-in-from-bottom-2">
-                    選択範囲内の一致率: (計算中...)
+                    選択範囲内の一致率: {matchRate}
                 </div>
             )}
         </div>

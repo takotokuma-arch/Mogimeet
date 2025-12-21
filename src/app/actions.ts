@@ -99,3 +99,53 @@ export async function createEvent(prevState: any, formData: FormData) {
         adminToken: event.admin_token
     }
 }
+
+export async function updateEventSettings(
+    eventId: string,
+    adminToken: string,
+    data: {
+        title?: string
+        description?: string
+        webhookUrl?: string
+        isNotifyConfirmed?: boolean
+        isNotifyUpdated?: boolean
+        reminderHours?: number
+    }
+) {
+    const supabase = createClient()
+
+    // Verify Admin
+    const { data: event } = await supabase.from('events').select('admin_token').eq('id', eventId).single()
+    if (!event || event.admin_token !== adminToken) {
+        return { error: 'Unauthorized' }
+    }
+
+    const updates: any = {}
+    if (data.title !== undefined) updates.title = data.title
+    if (data.description !== undefined) updates.description = data.description
+    if (data.webhookUrl !== undefined) updates.webhook_url = data.webhookUrl
+    if (data.isNotifyConfirmed !== undefined) updates.is_notify_confirmed = data.isNotifyConfirmed
+    if (data.isNotifyUpdated !== undefined) updates.is_notify_updated = data.isNotifyUpdated
+    if (data.reminderHours !== undefined) updates.reminder_hours = data.reminderHours
+
+    const { error } = await supabase.from('events').update(updates).eq('id', eventId)
+
+    if (error) return { error: 'Update failed' }
+    return { success: true }
+}
+
+import { sendDiscordNotification } from '@/lib/notification'
+
+export async function testDiscordWebhook(url: string) {
+    if (!url) return { error: 'No URL provided' }
+    try {
+        await sendDiscordNotification(url, 'create', {
+            id: 'test',
+            title: 'Webhook Test',
+            description: 'This is a test notification from MogiMeet.'
+        })
+        return { success: true }
+    } catch (e) {
+        return { error: 'Failed to send' }
+    }
+}

@@ -49,7 +49,7 @@ function Calendar({
                 // Day Button Styles
                 day: cn(
                     buttonVariants({ variant: "ghost" }),
-                    "h-12 w-12 p-0 font-normal aria-selected:opacity-100 rounded-full mx-auto",
+                    "h-12 w-12 p-0 font-normal aria-selected:opacity-100 rounded-full mx-auto text-slate-900 opacity-100",
                     "hover:bg-slate-100 hover:text-slate-900",
                     "aria-selected:bg-emerald-500 aria-selected:text-white aria-selected:hover:bg-emerald-600 aria-selected:hover:text-white aria-selected:font-bold aria-selected:shadow-md"
                 ),

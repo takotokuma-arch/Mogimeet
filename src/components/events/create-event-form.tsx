@@ -110,7 +110,7 @@ export function CreateEventForm() {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="space-y-2">
-                            <Label htmlFor="title" className="text-base font-bold text-slate-700">
+                            <Label htmlFor="title" className="text-base font-bold text-slate-800">
                                 イベント名 <span className="text-red-500">*</span>
                             </Label>
                             <Input
@@ -123,11 +123,11 @@ export function CreateEventForm() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="description" className="text-slate-600">説明（任意）</Label>
+                            <Label htmlFor="description" className="text-slate-700">説明（任意）</Label>
                             <Textarea
                                 id="description"
                                 placeholder="場所、会費、持ち物などを記入できます。"
-                                className="min-h-[100px] bg-slate-50/50"
+                                className="min-h-[100px] bg-slate-50/50 text-slate-800"
                                 {...register("description")}
                             />
                         </div>
@@ -157,7 +157,7 @@ export function CreateEventForm() {
                         </div>
                         {selectedDates && selectedDates.length > 0 && (
                             <div className="w-full mt-6 space-y-2 animate-in fade-in slide-in-from-top-1">
-                                <Label className="text-xs text-slate-500">選択中の日付 ({selectedDates.length})</Label>
+                                <Label className="text-xs text-slate-600">選択中の日付 ({selectedDates.length})</Label>
                                 <div className="flex flex-wrap gap-2">
                                     {selectedDates.slice(0, 15).map((date, i) => (
                                         <span key={i} className="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold shadow-sm border border-emerald-200">
@@ -165,7 +165,7 @@ export function CreateEventForm() {
                                         </span>
                                     ))}
                                     {(selectedDates.length > 15) && (
-                                        <span className="text-xs text-slate-400 self-center pl-2">他 {selectedDates.length - 15} 日...</span>
+                                        <span className="text-xs text-slate-500 self-center pl-2">他 {selectedDates.length - 15} 日...</span>
                                     )}
                                 </div>
                             </div>
@@ -188,7 +188,7 @@ export function CreateEventForm() {
 
                         {/* Slot Interval Unified Toggle */}
                         <div className="space-y-3">
-                            <Label className="text-sm font-medium text-slate-700">時間刻み</Label>
+                            <Label className="text-sm font-medium text-slate-800">時間刻み</Label>
                             <div className="grid grid-cols-3 gap-3">
                                 {['15', '30', '60'].map((val) => (
                                     <button
@@ -199,7 +199,7 @@ export function CreateEventForm() {
                                             "py-3 text-sm font-bold rounded-xl border transition-all duration-200",
                                             slotInterval === val
                                                 ? "bg-slate-900 text-white border-slate-900 shadow-md transform scale-[1.02]"
-                                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
                                         )}
                                     >
                                         {val}分
@@ -210,7 +210,7 @@ export function CreateEventForm() {
 
                         {/* Time Range */}
                         <div className="space-y-3">
-                            <Label className="text-sm font-medium text-slate-700">時間の範囲</Label>
+                            <Label className="text-sm font-medium text-slate-800">時間の範囲</Label>
                             <div className="flex items-center gap-4">
                                 <div className="flex-1 space-y-2">
                                     {/* Controller for Start Time */}
@@ -250,7 +250,7 @@ export function CreateEventForm() {
                                     </div>
                                 </div>
 
-                                <div className="text-slate-400">
+                                <div className="text-slate-500">
                                     <ArrowRight className="h-5 w-5" />
                                 </div>
 
@@ -291,21 +291,21 @@ export function CreateEventForm() {
                 {/* Section 4: Advanced (Accordion) */}
                 <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="options" className="border-b-0">
-                        <AccordionTrigger className="text-slate-500 hover:text-slate-800 hover:no-underline px-1">
+                        <AccordionTrigger className="text-slate-600 hover:text-slate-800 hover:no-underline px-1">
                             詳細設定（Webhookなど）
                         </AccordionTrigger>
                         <AccordionContent className="px-1">
                             <Card className="bg-slate-50 border border-slate-100 shadow-inner">
                                 <CardContent className="pt-6">
                                     <div className="space-y-3">
-                                        <Label htmlFor="webhookUrl" className="text-slate-600 font-medium">Discord Webhook URL</Label>
+                                        <Label htmlFor="webhookUrl" className="text-slate-700 font-medium">Discord Webhook URL</Label>
                                         <Input
                                             id="webhookUrl"
                                             placeholder="https://discord.com/api/webhooks/..."
                                             className="bg-white"
                                             {...register("webhookUrl")}
                                         />
-                                        <p className="text-[10px] text-slate-400">
+                                        <p className="text-[10px] text-slate-500">
                                             イベント作成時や日程決定時に通知が送信されます。
                                         </p>
                                     </div>
@@ -351,7 +351,7 @@ export function CreateEventForm() {
 
                     <div className="space-y-6 py-4">
                         <div className="space-y-2">
-                            <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">参加者用 URL</Label>
+                            <Label className="text-xs font-bold text-slate-600 uppercase tracking-wider">参加者用 URL</Label>
                             <div className="flex items-center space-x-2">
                                 <Input
                                     readOnly

@@ -55,6 +55,7 @@ export default async function EventPage({ params, searchParams }: Props) {
             event={event}
             timeSlots={timeSlots || []}
             isAdmin={isAdmin}
+            adminToken={isAdmin ? adminToken : undefined}
         />
     )
 }

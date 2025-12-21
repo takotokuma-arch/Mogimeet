@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { TimeGrid } from "@/components/events/grid/time-grid"
-import { Users, Link as LinkIcon, Edit3, Check, X } from "lucide-react"
+import { Users, Link as LinkIcon, Check, Settings } from "lucide-react"
 import { finalizeEvent } from "@/app/finalize-actions"
 import { useRouter } from "next/navigation"
+import { AdminPanel } from "@/components/events/admin-panel"
 
 // Types (should be in a types file, but keeping here for speed for now)
 type Event = {
@@ -20,6 +21,10 @@ type Event = {
     slot_interval: number
     confirmed_start_at: string | null
     confirmed_end_at: string | null
+    webhook_url?: string | null
+    is_notify_confirmed?: boolean
+    is_notify_updated?: boolean
+    reminder_hours?: number
 }
 
 type TimeSlot = {
@@ -31,15 +36,17 @@ interface EventViewProps {
     event: Event
     timeSlots: TimeSlot[]
     isAdmin: boolean
+    adminToken?: string
 }
 
-export function EventView({ event, timeSlots, isAdmin }: EventViewProps) {
+export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewProps) {
     const [isCheckInOpen, setIsCheckInOpen] = useState(false)
     const [userName, setUserName] = useState("")
     const [currentUser, setCurrentUser] = useState<{ id: string, name: string } | null>(null)
 
     // Admin State
     const [adminMode, setAdminMode] = useState(false)
+    const [showSettings, setShowSettings] = useState(false)
     const [adminSelectionRaw, setAdminSelectionRaw] = useState<{ start: string, end: string } | null>(null)
 
     const router = useRouter()
@@ -142,6 +149,11 @@ export function EventView({ event, timeSlots, isAdmin }: EventViewProps) {
                         <Button size="sm" variant="ghost" className="md:hidden">
                             <Users className="h-5 w-5" />
                         </Button>
+                        {isAdmin && (
+                            <Button size="sm" variant="ghost" onClick={() => setShowSettings(true)}>
+                                <Settings className="h-5 w-5" />
+                            </Button>
+                        )}
                     </div>
                 </header>
 
@@ -151,11 +163,6 @@ export function EventView({ event, timeSlots, isAdmin }: EventViewProps) {
                         <div className="text-xs text-pink-800 font-medium">
                             ドラッグして開催日時を決定してください
                         </div>
-                        {/* We would ideally listen to selection changes here. Validating selection is complex without lifting state up fully. */}
-                        {/* For MVP, we pass a callback to TimeGrid or just assume logic is internal? */}
-                        {/* Correction: We can't finalize if we don't know the selection. TimeGrid needs to bubble up selection. */}
-                        {/* Let's refactor TimeGrid Props slightly or use a Ref/Context? */}
-                        {/* Simplest: TimeGrid accepts `onAdminSelectionChange`. */}
                     </div>
                 )}
 
@@ -170,6 +177,26 @@ export function EventView({ event, timeSlots, isAdmin }: EventViewProps) {
                     />
                 </div>
 
+                {/* Confirmed Banner */}
+                {event.confirmed_start_at && (
+                    <div className="mx-4 mt-4 p-4 bg-white border-2 border-emerald-500 rounded-xl shadow-sm text-center space-y-2 animate-in slide-in-from-top-4">
+                        <div className="flex items-center justify-center gap-2 text-emerald-600 font-bold text-lg">
+                            <Check className="h-6 w-6" />
+                            <span>日程が決定しました！</span>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 inline-block w-full">
+                            <div className="font-bold text-2xl text-slate-800">
+                                {event.confirmed_start_at && new Date(event.confirmed_start_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' })}
+                            </div>
+                            <div className="text-lg text-slate-600 font-mono">
+                                {event.confirmed_start_at && new Date(event.confirmed_start_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                                {' - '}
+                                {event.confirmed_end_at && new Date(event.confirmed_end_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Floating Finalize Button */}
                 {adminMode && adminSelectionRaw && (
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
@@ -178,7 +205,8 @@ export function EventView({ event, timeSlots, isAdmin }: EventViewProps) {
                             className="shadow-xl bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-full px-8 animate-in zoom-in"
                             onClick={async () => {
                                 if (!confirm("この日時で決定しますか？\n(参加者には通知されませんが、管理者トークンページで確認できます)")) return
-                                const res = await finalizeEvent(event.id, new URLSearchParams(window.location.search).get('token')!, adminSelectionRaw.start, adminSelectionRaw.end)
+                                if (!adminToken) return
+                                const res = await finalizeEvent(event.id, adminToken, adminSelectionRaw.start, adminSelectionRaw.end)
                                 if (res.success) {
                                     alert("日程を決定しました！")
                                     setAdminMode(false)
@@ -222,6 +250,15 @@ export function EventView({ event, timeSlots, isAdmin }: EventViewProps) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Admin Panel */}
+            {showSettings && isAdmin && adminToken && (
+                <AdminPanel
+                    event={event}
+                    adminToken={adminToken}
+                    onClose={() => setShowSettings(false)}
+                />
+            )}
         </div>
     )
 }
