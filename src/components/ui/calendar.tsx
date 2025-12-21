@@ -18,46 +18,48 @@ function Calendar({
     return (
         <DayPicker
             showOutsideDays={showOutsideDays}
-            className={cn("p-3", className)}
+            className={cn("p-3 bg-white rounded-xl shadow-sm border", className)}
             classNames={{
                 months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-                month: "space-y-4 w-full",
+                month: "space-y-4",
                 caption: "flex justify-center pt-1 relative items-center mb-4",
                 caption_label: "text-lg font-bold text-slate-800",
                 nav: "space-x-1 flex items-center",
                 nav_button: cn(
                     buttonVariants({ variant: "outline" }),
-                    "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+                    "h-8 w-8 bg-transparent p-0 opacity-50 hover:opacity-100"
                 ),
                 nav_button_previous: "absolute left-1",
                 nav_button_next: "absolute right-1",
 
-                // --- STRICT GRID IMPLEMENTATION ---
+                // --- NATIVE TABLE LAYOUT ---
+                // We use native table for 100% stable alignment of dates
+                table: "w-full border-collapse",
 
-                // 1. Reset Table Semantics to Blocks
-                table: "w-full border-collapse block",
-                head: "w-full block",
-                tbody: "w-full block",
+                // --- HIDE HEADER ---
+                // User explicitly requested to remove the header because of alignment issues.
+                head_row: "hidden",
 
-                // 2. Force 7-Column Grid on Rows
-                head_row: "grid grid-cols-7 w-full mb-2",
-                row: "grid grid-cols-7 w-full mt-2",
+                // Row Styles
+                row: "w-full mt-2",
 
-                // 3. Reset Flex/centering on cells to allow Grid to control width
-                head_cell: "text-muted-foreground w-full font-normal text-sm text-center flex justify-center items-center h-10",
-                cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-transparent w-full h-14 flex justify-center items-center",
+                // Cell Styles
+                cell: "h-12 w-12 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-transparent",
 
-                // 4. Day Button Styling (Lettucemeet)
+                // Day Button Styles
                 day: cn(
                     buttonVariants({ variant: "ghost" }),
-                    "h-12 w-12 p-0 font-normal aria-selected:opacity-100 rounded-full",
-                    "aria-selected:bg-emerald-500 aria-selected:text-white aria-selected:hover:bg-emerald-600 aria-selected:hover:text-white aria-selected:font-bold"
+                    "h-12 w-12 p-0 font-normal aria-selected:opacity-100 rounded-full mx-auto",
+                    "hover:bg-slate-100 hover:text-slate-900",
+                    "aria-selected:bg-emerald-500 aria-selected:text-white aria-selected:hover:bg-emerald-600 aria-selected:hover:text-white aria-selected:font-bold aria-selected:shadow-md"
                 ),
 
                 day_range_end: "day-range-end",
                 day_selected:
-                    "bg-emerald-500 text-white hover:bg-emerald-600 focus:bg-emerald-600 shadow-md font-bold rounded-full !opacity-100",
-                day_today: "bg-slate-100 text-slate-900 font-bold rounded-full border border-slate-200",
+                    "bg-emerald-500 text-white hover:bg-emerald-600 focus:bg-emerald-600 shadow-md transform scale-105 transition-all duration-200 ease-in-out font-bold rounded-full !opacity-100",
+
+                day_today: "bg-slate-100 text-slate-900 font-bold rounded-full",
+
                 day_outside:
                     "day-outside text-muted-foreground opacity-50 aria-selected:bg-emerald-500/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
                 day_disabled: "text-muted-foreground opacity-50",
@@ -69,6 +71,8 @@ function Calendar({
             components={{
                 IconLeft: ({ ...props }) => <ChevronLeft className="h-5 w-5" />,
                 IconRight: ({ ...props }) => <ChevronRight className="h-5 w-5" />,
+                // Explicitly nullify Head component just to be safe, though CSS hidden should work.
+                Head: () => null,
             }}
             {...props}
         />

@@ -151,7 +151,7 @@ export function CreateEventForm() {
                                 mode="multiple"
                                 selected={selectedDates}
                                 onSelect={setSelectedDates}
-                                locale={ja}
+
                                 className="rounded-md"
                             />
                         </div>
