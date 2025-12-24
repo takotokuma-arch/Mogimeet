@@ -32,24 +32,26 @@ function Calendar({
                 nav_button_previous: "absolute left-1",
                 nav_button_next: "absolute right-1",
 
-                // --- NATIVE TABLE LAYOUT ---
-                // We use native table for 100% stable alignment of dates
-                table: "w-full border-collapse",
+                // --- FORCE CSS GRID LAYOUT ---
+                // Override all table display styles to ensure pure 7-column alignment
+                table: "!grid w-full",
 
-                // --- HIDE HEADER ---
-                // User explicitly requested to remove the header because of alignment issues.
-                head_row: "hidden",
+                // Head (Weekdays)
+                tbody: "!grid w-full gap-2",
+                head_row: "!grid grid-cols-7 w-full mb-2",
+                head_cell: "text-muted-foreground rounded-md w-full font-normal text-[0.8rem] flex justify-center items-center text-slate-500",
 
                 // Row Styles
-                row: "w-full mt-2",
+                row: "!grid grid-cols-7 w-full gap-y-2 mt-0",
 
                 // Cell Styles
-                cell: "h-12 w-12 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-transparent",
+                // Force 100% width/height alignment within grid cell
+                cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-transparent aspect-square flex justify-center items-center",
 
                 // Day Button Styles
                 day: cn(
                     buttonVariants({ variant: "ghost" }),
-                    "h-12 w-12 p-0 font-normal aria-selected:opacity-100 rounded-full mx-auto text-slate-900 opacity-100",
+                    "h-full w-full p-0 font-normal aria-selected:opacity-100 rounded-full text-slate-900 opacity-100 aspect-square",
                     "hover:bg-slate-100 hover:text-slate-900",
                     "aria-selected:bg-emerald-500 aria-selected:text-white aria-selected:hover:bg-emerald-600 aria-selected:hover:text-white aria-selected:font-bold aria-selected:shadow-md"
                 ),
@@ -71,8 +73,6 @@ function Calendar({
             components={{
                 IconLeft: ({ ...props }) => <ChevronLeft className="h-5 w-5" />,
                 IconRight: ({ ...props }) => <ChevronRight className="h-5 w-5" />,
-                // Explicitly nullify Head component just to be safe, though CSS hidden should work.
-                Head: () => null,
             }}
             {...props}
         />

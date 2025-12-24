@@ -6,6 +6,11 @@ import { addHours, subMinutes, addMinutes, isAfter, isBefore } from 'date-fns'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const supabase = createClient()
 
     // 1. Fetch upcoming events with deadlines

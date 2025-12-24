@@ -14,6 +14,8 @@ export async function createEvent(prevState: any, formData: FormData) {
     const displayEndTime = formData.get('displayEndTime') as string || '23:00'
     const timezone = formData.get('timezone') as string || 'UTC'
     const webhookUrl = formData.get('webhookUrl') as string
+    const reminderHoursStr = formData.get('reminder_hours') as string
+    const reminderHours = (reminderHoursStr && reminderHoursStr !== '0') ? parseInt(reminderHoursStr) : null
 
     if (!title || !selectedDatesStr) {
         return { error: 'Missing required fields' }
@@ -36,6 +38,7 @@ export async function createEvent(prevState: any, formData: FormData) {
             display_end_time: displayEndTime,
             timezone, // Save the timezone!
             webhook_url: webhookUrl || null,
+            reminder_hours: reminderHours,
         })
         .select('id, admin_token')
         .single()
@@ -56,6 +59,7 @@ export async function createEvent(prevState: any, formData: FormData) {
                 display_end_time: displayEndTime,
                 // timezone omitted
                 webhook_url: webhookUrl || null,
+                reminder_hours: reminderHours,
             })
             .select('id, admin_token')
             .single();

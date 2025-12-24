@@ -47,7 +47,8 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
     const [currentUser, setCurrentUser] = useState<{ id: string, name: string } | null>(null)
 
     // Admin State
-    const [adminMode, setAdminMode] = useState(false)
+    // Admin State
+    const [isScheduleMode, setIsScheduleMode] = useState(false)
     const [showSettings, setShowSettings] = useState(false)
     const [adminSelectionRaw, setAdminSelectionRaw] = useState<{ start: string, end: string } | null>(null)
 
@@ -92,7 +93,36 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
             setCurrentUser({ id: response.id, name: userName })
             setIsCheckInOpen(false)
         }
+        if (response) {
+            localStorage.setItem(`mogimeet_response_${event.id}`, response.id)
+            localStorage.setItem(`mogimeet_name_${event.id}`, userName)
+            setCurrentUser({ id: response.id, name: userName })
+            setIsCheckInOpen(false)
+        }
     }
+
+    // Realtime Subscription for Heatmap
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel('availability-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'availability',
+                },
+                () => {
+                    router.refresh()
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [router])
 
     return (
         <div className="flex h-screen bg-white overflow-hidden">
@@ -144,11 +174,11 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                         {isAdmin && (
                             <Button
                                 size="sm"
-                                variant={adminMode ? "default" : "outline"}
-                                className={cn(adminMode && "bg-pink-600 hover:bg-pink-700 border-pink-600 text-white")}
-                                onClick={() => setAdminMode(!adminMode)}
+                                variant={isScheduleMode ? "default" : "outline"}
+                                className={cn(isScheduleMode && "bg-pink-600 hover:bg-pink-700 border-pink-600 text-white")}
+                                onClick={() => setIsScheduleMode(!isScheduleMode)}
                             >
-                                {adminMode ? "調整モード終了" : "日程を決定する"}
+                                {isScheduleMode ? "調整モード終了" : "日程を決定する"}
                             </Button>
                         )}
                         <Drawer>
@@ -190,7 +220,7 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                 </header>
 
                 {/* Admin Finalize Bar */}
-                {adminMode && (
+                {isScheduleMode && (
                     <div className="bg-pink-50 border-b border-pink-200 p-2 flex items-center justify-between px-4 animate-in slide-in-from-top-2">
                         <div className="text-xs text-pink-800 font-medium">
                             ドラッグして開催日時を決定してください
@@ -202,9 +232,10 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                 <div className="flex-1 overflow-auto p-4 relative" style={{ touchAction: 'none' }}>
                     <TimeGrid
                         timeSlots={timeSlots}
-                        userResponseId={adminMode ? 'admin_mode' : (currentUser?.id || null)}
+                        userResponseId={isScheduleMode ? 'admin_mode' : (currentUser?.id || null)}
                         isAdmin={isAdmin}
                         eventId={event.id}
+                        isScheduleMode={isScheduleMode}
                         onAdminSelect={(s, e) => setAdminSelectionRaw({ start: s, end: e })}
                     />
                 </div>
@@ -229,29 +260,20 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                     </div>
                 )}
 
-                {/* Floating Finalize Button */}
-                {adminMode && adminSelectionRaw && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
-                        <Button
-                            size="lg"
-                            className="shadow-xl bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-full px-8 animate-in zoom-in"
-                            onClick={async () => {
-                                if (!confirm("この日時で決定しますか？\n(参加者には通知されませんが、管理者トークンページで確認できます)")) return
-                                if (!adminToken) return
-                                const res = await finalizeEvent(event.id, adminToken, adminSelectionRaw.start, adminSelectionRaw.end)
-                                if (res.success) {
-                                    toast.success("日程を決定しました！", { description: "参加者に通知が送信されます" })
-                                    setAdminMode(false)
-                                    router.refresh()
-                                } else {
-                                    toast.error("エラーが発生しました")
-                                }
-                            }}
-                        >
-                            <Check className="mr-2 h-4 w-4" /> 決定する
-                        </Button>
-                    </div>
-                )}
+                {/** Floating Button Removed, moved to AdminPanel or Header logic per user request (User asked for "this date confirmed" button in AdminPanel)
+                    But wait, the user said "AdminPanelに...ボタンを設置し".
+                    And AdminPanel is a sidebar.
+                    Wait, if I put it in AdminPanel, the AdminPanel needs to be OPEN to verify.
+                    Actually, maybe I should auto-open AdminPanel if schedule mode is on, OR
+                    User instruction: "EventView に isScheduleMode (boolean) ステートを追加し、AdminPanel のトグルスイッチで切り替えられるようにしてください。"
+                    So the toggle is IN AdminPanel.
+                    Ah, okay. So the button in header I made earlier (in previous task or existing code) should be removed or changed to just open admin panel?
+                    The current code has a header button for "日程を決定する".
+                    I will follow the logic: AdminPanel controls the mode.
+                    So I should remove the header button toggle if it duplicates.
+                    Actually, let's keep the header button as a shortcut to open settings or just rely on AdminPanel toggle.
+                    For now, I'll remove the floating button as requested.
+                 */}
             </main>
 
             {/* Check-in Modal */}
@@ -289,6 +311,9 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                     event={event}
                     adminToken={adminToken}
                     onClose={() => setShowSettings(false)}
+                    isScheduleMode={isScheduleMode}
+                    onToggleScheduleMode={(val) => setIsScheduleMode(val)}
+                    currentSelection={adminSelectionRaw}
                 />
             )}
         </div>

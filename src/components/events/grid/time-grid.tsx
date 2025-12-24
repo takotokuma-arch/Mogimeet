@@ -21,10 +21,11 @@ interface TimeGridProps {
     userResponseId: string | null
     isAdmin: boolean
     eventId: string
+    isScheduleMode?: boolean
     onAdminSelect?: (startSlotId: string, endSlotId: string) => void
 }
 
-export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminSelect }: TimeGridProps) {
+export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, isScheduleMode, onAdminSelect }: TimeGridProps) {
     const supabase = createClient()
     const containerRef = useRef<HTMLDivElement>(null)
 
@@ -158,17 +159,19 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
     }
 
     // Generalized Rectangular Selection Calculation
-    const getSlotsInRectangle = (startId: string, endId: string) => {
+    const getSlotsInRectangle = (startId: string, endId: string): string[] => {
         let startPos: { d: number, t: number } | null = null
         let endPos: { d: number, t: number } | null = null
 
-        dates.forEach((d, dIdx) => {
-            timeLabels.forEach((t, tIdx) => {
+        for (let dIdx = 0; dIdx < dates.length; dIdx++) {
+            const d = dates[dIdx];
+            for (let tIdx = 0; tIdx < timeLabels.length; tIdx++) {
+                const t = timeLabels[tIdx];
                 const s = gridData[d][t]
                 if (s?.id === startId) startPos = { d: dIdx, t: tIdx }
                 if (s?.id === endId) endPos = { d: dIdx, t: tIdx }
-            })
-        })
+            }
+        }
 
         if (!startPos || !endPos) return []
 
@@ -177,7 +180,7 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
         const minT = Math.min(startPos.t, endPos.t)
         const maxT = Math.max(startPos.t, endPos.t)
 
-        const selectedIds = []
+        const selectedIds: string[] = []
 
         for (let d = minD; d <= maxD; d++) {
             for (let t = minT; t <= maxT; t++) {
@@ -204,7 +207,7 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
         // Intersection Logic to calculate match rate
         let commonUserIds: Set<string> | null = null
 
-        selectedIds.forEach(slotId => {
+        for (const slotId of selectedIds) {
             const slotUsers = heatmapSets[slotId] || new Set()
             if (commonUserIds === null) {
                 commonUserIds = new Set(slotUsers)
@@ -213,7 +216,7 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
                     Array.from(commonUserIds).filter(x => slotUsers.has(x))
                 )
             }
-        })
+        }
 
         setAdminSelectedSlots(new Set(selectedIds))
 
@@ -233,10 +236,11 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
     }
 
     const handlePointerDown = (e: React.PointerEvent, slotId: string) => {
+        // Prevent default browser behavior (scrolling, etc.)
         e.preventDefault()
 
         // Admin Mode Logic
-        if (isAdmin && userResponseId === 'admin_mode') {
+        if (isScheduleMode) {
             setIsDragging(true)
             setAdminSelection({ startSlotId: slotId, endSlotId: slotId })
             setAdminSelectedSlots(new Set([slotId]))
@@ -266,10 +270,13 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
     }
 
     const handlePointerEnter = (e: React.PointerEvent, slotId: string) => {
+        // Critical for mobile: prevent scrolling when dragging
+        e.preventDefault()
+
         if (!isDragging || slotId === lastEnteredSlotId) return
 
         // Admin Mode Logic
-        if (isAdmin && userResponseId === 'admin_mode') {
+        if (isScheduleMode) {
             if (adminSelection) {
                 const newSelection = { ...adminSelection, endSlotId: slotId }
                 setAdminSelection(newSelection)
@@ -307,7 +314,7 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
         setDragStartSlotId(null)
         // triggerHaptic() // Maybe on release?
 
-        if (isAdmin && userResponseId === 'admin_mode') {
+        if (isScheduleMode) {
             return
         }
 
@@ -327,9 +334,18 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
     return (
         <div
             ref={containerRef}
+            // "touch-action: none" is crucial for preventing scroll on mobile
             className="select-none touch-none inline-block min-w-full"
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
+            // Also listen to pointer move on container to strictly prevent default if needed
+            // But usually touch-action: none on container is enough for modern browsers.
+            // Adding a global move listener or similar might be overkill, but let's stick to simple props first.
+            // Note: pointermove is handled by slots' onPointerEnter in this logic. 
+            // To ensure safety, we can add a no-op move handler that prevents default behavior if dragging.
+            onPointerMove={(e) => {
+                if (isDragging) e.preventDefault()
+            }}
         >
             <div className="flex">
                 {/* Time Labels Column */}

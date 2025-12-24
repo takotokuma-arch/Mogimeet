@@ -32,6 +32,7 @@ const formSchema = z.object({
     displayEndTime: z.string(),
     timezone: z.string().default(Intl.DateTimeFormat().resolvedOptions().timeZone), // Default to user's system timezone
     webhookUrl: z.string().url("有効なURLを入力してください").optional().or(z.literal("")),
+    reminderHours: z.string().optional(),
 })
 
 export function CreateEventForm() {
@@ -61,6 +62,7 @@ export function CreateEventForm() {
             displayEndTime: "23:00",
             timezone: systemTimezone,
             webhookUrl: "",
+            reminderHours: "3", // Default to 3 hours
         },
     })
 
@@ -84,6 +86,7 @@ export function CreateEventForm() {
         formData.append('slotInterval', slotInterval)
         formData.append('timezone', data.timezone)
         if (data.webhookUrl) formData.append('webhookUrl', data.webhookUrl)
+        formData.append('reminder_hours', data.reminderHours || '0')
         formData.append('selectedDates', JSON.stringify(selectedDates.map(d => format(d, 'yyyy-MM-dd'))))
 
         try {
@@ -344,6 +347,31 @@ export function CreateEventForm() {
                                         <p className="text-[10px] text-slate-500">
                                             イベント作成時や日程決定時に通知が送信されます。
                                         </p>
+                                    </div>
+
+                                    <div className="space-y-3 mt-6">
+                                        <Label htmlFor="reminderHours" className="text-slate-700 font-medium">リマインド設定</Label>
+                                        <div className="flex flex-col gap-2">
+                                            <Select
+                                                defaultValue="3"
+                                                onValueChange={(val) => setValue('reminderHours', val)}
+                                            >
+                                                <SelectTrigger className="w-full bg-white">
+                                                    <SelectValue placeholder="リマインド時間を選択" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="0">なし</SelectItem>
+                                                    <SelectItem value="1">1時間前</SelectItem>
+                                                    <SelectItem value="3">3時間前</SelectItem>
+                                                    <SelectItem value="12">12時間前</SelectItem>
+                                                    <SelectItem value="24">24時間前（前日）</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <input type="hidden" {...register("reminderHours")} />
+                                            <p className="text-[10px] text-slate-500">
+                                                指定した時間の前に、Discordで通知を受け取れます（Webhook設定必須）。
+                                            </p>
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
