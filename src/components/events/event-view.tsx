@@ -12,6 +12,8 @@ import { Users, Link as LinkIcon, Check, Settings } from "lucide-react"
 import { finalizeEvent } from "@/app/finalize-actions"
 import { useRouter } from "next/navigation"
 import { AdminPanel } from "@/components/events/admin-panel"
+import { toast } from "sonner"
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
 
 // Types (should be in a types file, but keeping here for speed for now)
 type Event = {
@@ -117,7 +119,10 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                 </div>
 
                 <div className="p-4 border-t border-slate-200">
-                    <Button variant="outline" className="w-full text-xs" onClick={() => navigator.clipboard.writeText(window.location.href.split('?')[0])}>
+                    <Button variant="outline" className="w-full text-xs" onClick={() => {
+                        navigator.clipboard.writeText(window.location.href.split('?')[0])
+                        toast.success("URLをコピーしました")
+                    }}>
                         <LinkIcon className="mr-2 h-3 w-3" /> URLをコピー
                     </Button>
                 </div>
@@ -146,9 +151,36 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                                 {adminMode ? "調整モード終了" : "日程を決定する"}
                             </Button>
                         )}
-                        <Button size="sm" variant="ghost" className="md:hidden">
-                            <Users className="h-5 w-5" />
-                        </Button>
+                        <Drawer>
+                            <DrawerTrigger asChild>
+                                <Button size="sm" variant="ghost" className="md:hidden">
+                                    <Users className="h-5 w-5" />
+                                </Button>
+                            </DrawerTrigger>
+                            <DrawerContent>
+                                <DrawerHeader>
+                                    <DrawerTitle>参加者一覧</DrawerTitle>
+                                    <DrawerDescription>これまでの回答状況</DrawerDescription>
+                                </DrawerHeader>
+                                <div className="p-4 space-y-4">
+                                    <div className="space-y-2">
+                                        {currentUser && (
+                                            <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 text-emerald-900 text-sm font-medium">
+                                                <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                                                {currentUser.name} (You)
+                                            </div>
+                                        )}
+                                        {/* Real list would go here */}
+                                    </div>
+                                    <Button variant="outline" className="w-full" onClick={() => {
+                                        navigator.clipboard.writeText(window.location.href.split('?')[0])
+                                        toast.success("URLをコピーしました")
+                                    }}>
+                                        <LinkIcon className="mr-2 h-4 w-4" /> 招待URLをコピー
+                                    </Button>
+                                </div>
+                            </DrawerContent>
+                        </Drawer>
                         {isAdmin && (
                             <Button size="sm" variant="ghost" onClick={() => setShowSettings(true)}>
                                 <Settings className="h-5 w-5" />
@@ -208,11 +240,11 @@ export function EventView({ event, timeSlots, isAdmin, adminToken }: EventViewPr
                                 if (!adminToken) return
                                 const res = await finalizeEvent(event.id, adminToken, adminSelectionRaw.start, adminSelectionRaw.end)
                                 if (res.success) {
-                                    alert("日程を決定しました！")
+                                    toast.success("日程を決定しました！", { description: "参加者に通知が送信されます" })
                                     setAdminMode(false)
                                     router.refresh()
                                 } else {
-                                    alert("エラーが発生しました")
+                                    toast.error("エラーが発生しました")
                                 }
                             }}
                         >

@@ -134,6 +134,9 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
     }, [userResponseId, supabase, eventId])
 
 
+    const [dragStartSlotId, setDragStartSlotId] = useState<string | null>(null)
+    const [selectionSnapshot, setSelectionSnapshot] = useState<Set<string>>(new Set())
+
     // Pointer Events Handlers
     const toggleSlot = useCallback((slotId: string, mode: 'add' | 'remove') => {
         setMyAvailability(prev => {
@@ -145,15 +148,17 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
             }
             return next
         })
-
-        // Haptic Feedback
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-            navigator.vibrate(8) // Tiny vibration
-        }
     }, [])
 
-    // Helper to calculate slots in rectangle
-    const calculateAdminSelection = (startId: string, endId: string) => {
+    // Haptic Feedback Helper
+    const triggerHaptic = () => {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(8)
+        }
+    }
+
+    // Generalized Rectangular Selection Calculation
+    const getSlotsInRectangle = (startId: string, endId: string) => {
         let startPos: { d: number, t: number } | null = null
         let endPos: { d: number, t: number } | null = null
 
@@ -165,17 +170,14 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
             })
         })
 
-        if (!startPos || !endPos) return
+        if (!startPos || !endPos) return []
 
         const minD = Math.min(startPos.d, endPos.d)
         const maxD = Math.max(startPos.d, endPos.d)
         const minT = Math.min(startPos.t, endPos.t)
         const maxT = Math.max(startPos.t, endPos.t)
 
-        const selectedIds = new Array<string>()
-
-        // Intersection Logic
-        let commonUserIds: Set<string> | null = null
+        const selectedIds = []
 
         for (let d = minD; d <= maxD; d++) {
             for (let t = minT; t <= maxT; t++) {
@@ -184,21 +186,35 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
                 const slot = gridData[dateKey][timeKey]
                 if (slot) {
                     selectedIds.push(slot.id)
-
-                    const slotUsers = heatmapSets[slot.id] || new Set()
-                    if (commonUserIds === null) {
-                        commonUserIds = new Set(slotUsers)
-                    } else {
-                        // Intersection
-                        commonUserIds = new Set(
-                            Array.from(commonUserIds).filter(x => slotUsers.has(x))
-                        )
-                    }
                 }
             }
         }
+        return selectedIds
+    }
 
-        if (selectedIds.length === 0) setAdminSelection(null)
+    // Helper to calculate slots in rectangle for Admin (also calculates match rate)
+    const calculateAdminSelection = (startId: string, endId: string) => {
+        const selectedIds = getSlotsInRectangle(startId, endId)
+
+        if (selectedIds.length === 0) {
+            if (onAdminSelect) onAdminSelect(startId, endId) // Ensure fallback
+            return
+        }
+
+        // Intersection Logic to calculate match rate
+        let commonUserIds: Set<string> | null = null
+
+        selectedIds.forEach(slotId => {
+            const slotUsers = heatmapSets[slotId] || new Set()
+            if (commonUserIds === null) {
+                commonUserIds = new Set(slotUsers)
+            } else {
+                commonUserIds = new Set(
+                    Array.from(commonUserIds).filter(x => slotUsers.has(x))
+                )
+            }
+        })
+
         setAdminSelectedSlots(new Set(selectedIds))
 
         // Calculate Rate
@@ -218,6 +234,7 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
 
     const handlePointerDown = (e: React.PointerEvent, slotId: string) => {
         e.preventDefault()
+
         // Admin Mode Logic
         if (isAdmin && userResponseId === 'admin_mode') {
             setIsDragging(true)
@@ -233,10 +250,18 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
         target.releasePointerCapture(e.pointerId)
 
         setIsDragging(true)
+        setDragStartSlotId(slotId)
+
         const isSelected = myAvailability.has(slotId)
         const newMode = isSelected ? 'remove' : 'add'
         setDragMode(newMode)
+
+        // Snapshot current availability so we can apply rectangular diffs
+        setSelectionSnapshot(new Set(myAvailability))
+
+        // Apply initial change
         toggleSlot(slotId, newMode)
+        triggerHaptic()
         setLastEnteredSlotId(slotId)
     }
 
@@ -254,7 +279,24 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
             return
         }
 
-        toggleSlot(slotId, dragMode)
+        // Normal User Rectangular Selection Logic
+        if (dragStartSlotId) {
+            const affectedSlots = getSlotsInRectangle(dragStartSlotId, slotId)
+
+            // Reconstruct selection from snapshot + current rectangle
+            const nextSelection = new Set(selectionSnapshot)
+
+            affectedSlots.forEach(id => {
+                if (dragMode === 'add') {
+                    nextSelection.add(id)
+                } else {
+                    nextSelection.delete(id)
+                }
+            })
+
+            setMyAvailability(nextSelection)
+        }
+
         setLastEnteredSlotId(slotId)
     }
 
@@ -262,6 +304,8 @@ export function TimeGrid({ timeSlots, userResponseId, isAdmin, eventId, onAdminS
         if (!isDragging) return
         setIsDragging(false)
         setLastEnteredSlotId(null)
+        setDragStartSlotId(null)
+        // triggerHaptic() // Maybe on release?
 
         if (isAdmin && userResponseId === 'admin_mode') {
             return

@@ -1,8 +1,7 @@
-'use server'
-
 import { createClient } from '@/lib/supabase/client'
 import { redirect } from 'next/navigation'
 import { addMinutes, format, parse } from 'date-fns'
+import { fromZonedTime } from 'date-fns-tz'
 
 export async function createEvent(prevState: any, formData: FormData) {
     const supabase = createClient()
@@ -13,16 +12,21 @@ export async function createEvent(prevState: any, formData: FormData) {
     const slotInterval = parseInt(formData.get('slotInterval') as string || '30')
     const displayStartTime = formData.get('displayStartTime') as string || '09:00'
     const displayEndTime = formData.get('displayEndTime') as string || '23:00'
+    const timezone = formData.get('timezone') as string || 'UTC'
     const webhookUrl = formData.get('webhookUrl') as string
 
     if (!title || !selectedDatesStr) {
         return { error: 'Missing required fields' }
     }
 
-    const selectedDates = JSON.parse(selectedDatesStr) as string[] // Expect ISO date strings
+    const selectedDates = JSON.parse(selectedDatesStr) as string[] // Expect YYYY-MM-DD strings
 
     // 1. Create Event
-    const { data: event, error: eventError } = await supabase
+    let eventData;
+    let eventError;
+
+    // Try inserting with timezone
+    const res = await supabase
         .from('events')
         .insert({
             title,
@@ -30,55 +34,72 @@ export async function createEvent(prevState: any, formData: FormData) {
             slot_interval: slotInterval,
             display_start_time: displayStartTime,
             display_end_time: displayEndTime,
+            timezone, // Save the timezone!
             webhook_url: webhookUrl || null,
         })
         .select('id, admin_token')
         .single()
 
-    if (eventError || !event) {
-        console.error('Error creating event:', eventError)
+    eventData = res.data;
+    eventError = res.error;
+
+    // Fallback: If timezone column is missing (code 42703 or schema cache error), try inserting without it
+    if (eventError && (eventError.code === '42703' || eventError.message?.includes('Could not find the') || eventError.message?.includes('timezone'))) {
+        console.warn('Timezone column missing or schema cache stale. Falling back to legacy insert.');
+        const fallbackRes = await supabase
+            .from('events')
+            .insert({
+                title,
+                description,
+                slot_interval: slotInterval,
+                display_start_time: displayStartTime,
+                display_end_time: displayEndTime,
+                // timezone omitted
+                webhook_url: webhookUrl || null,
+            })
+            .select('id, admin_token')
+            .single();
+
+        eventData = fallbackRes.data;
+        eventError = fallbackRes.error;
+    }
+
+    if (eventError || !eventData) {
+        console.error('Error creating event:', JSON.stringify(eventError, null, 2))
         return { error: 'Failed to create event' }
     }
+
+    const event = eventData;
 
     // 2. Generate Time Slots
     const timeSlots = []
 
-    // Helper to parse time string "09:00" to minutes
-    const parseTimeToMinutes = (timeStr: string) => {
-        const [hours, minutes] = timeStr.split(':').map(Number)
-        return hours * 60 + minutes
-    }
-
-    const startMinutes = parseTimeToMinutes(displayStartTime)
-    const endMinutes = parseTimeToMinutes(displayEndTime)
-
     for (const dateStr of selectedDates) {
-        const baseDate = new Date(dateStr)
-        // We assume the dates selected are essentially "local" days. 
-        // We need to construct the timestamp with timezone for the DB.
-        // However, the spec says "TIMESTAMPTZ". 
-        // For simplicity, we will generate slots for that "day" from start time to end time.
-        // We'll iterate from startMinutes to endMinutes.
+        // Construct start and end times for this date in the target timezone
+        const startDateTimeStr = `${dateStr} ${displayStartTime}`
+        const endDateTimeStr = `${dateStr} ${displayEndTime}`
 
-        let currentMinutes = startMinutes
+        // Convert to UTC Date objects
+        const startAt = fromZonedTime(startDateTimeStr, timezone)
+        let endAt = fromZonedTime(endDateTimeStr, timezone)
 
-        // Safety check loop to avoid infinite loops
-        while (currentMinutes < endMinutes) {
-            // Construct the specific datetime
-            const hours = Math.floor(currentMinutes / 60)
-            const mins = currentMinutes % 60
+        // Handle case where end time is simpler or wraps? 
+        // For simplicity, we assume same-day range like "09:00" to "23:00".
+        // If "end" is smaller than "start" (e.g. 23:00 to 02:00), we probably should handle next day?
+        // Current requirement implies simple day ranges. 
+        if (endAt <= startAt) {
+            // If end time is same or before start, maybe user meant next day? 
+            // But simpler to just skip or assume same day end. 
+            // Let's assume strict same-day range for now.
+        }
 
-            // Create a new date object for this specific slot
-            // baseDate is set to 00:00:00 of that day ideally.
-            const slotDate = new Date(baseDate)
-            slotDate.setHours(hours, mins, 0, 0)
-
+        let current = startAt
+        while (current < endAt) {
             timeSlots.push({
                 event_id: event.id,
-                start_at: slotDate.toISOString()
+                start_at: current.toISOString()
             })
-
-            currentMinutes += slotInterval
+            current = addMinutes(current, slotInterval)
         }
     }
 
@@ -88,8 +109,6 @@ export async function createEvent(prevState: any, formData: FormData) {
 
     if (slotsError) {
         console.error('Error creating slots:', slotsError)
-        // Ideally we should rollback the event creation here, but Supabase doesn't support easy transactions via JS client without RPC.
-        // For MVP we log error.
         return { error: 'Failed to create time slots' }
     }
 

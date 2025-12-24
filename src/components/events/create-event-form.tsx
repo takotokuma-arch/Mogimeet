@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner" // Import sonner
 // import { useFormStatus } from "react-dom" // We are switching to React Hook Form + Client Submit for easy Zod validation
 import { format } from "date-fns"
 import { ja } from "date-fns/locale"
-import { CalendarIcon, Loader2, CheckCircle, ArrowRight, Clock } from "lucide-react"
+import { CalendarIcon, Loader2, CheckCircle, ArrowRight, Clock, Globe } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -29,6 +30,7 @@ const formSchema = z.object({
     description: z.string().optional(),
     displayStartTime: z.string(),
     displayEndTime: z.string(),
+    timezone: z.string().default(Intl.DateTimeFormat().resolvedOptions().timeZone), // Default to user's system timezone
     webhookUrl: z.string().url("有効なURLを入力してください").optional().or(z.literal("")),
 })
 
@@ -36,15 +38,19 @@ export function CreateEventForm() {
     const router = useRouter()
     const [selectedDates, setSelectedDates] = useState<Date[] | undefined>([])
     const [slotInterval, setSlotInterval] = useState("30")
-    const [isSubmitting, setIsSubmitting] = useState(false) // Manual loading state
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     const [result, setResult] = useState<{ success?: boolean; error?: string; eventId?: string; adminToken?: string } | null>(null)
     const [isOpen, setIsOpen] = useState(false)
+
+    // Get system timezone for default
+    const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
     const {
         register,
         handleSubmit,
         formState: { errors },
+        setValue, // We need setValue for Select
         watch,
     } = useForm({
         resolver: zodResolver(formSchema),
@@ -53,6 +59,7 @@ export function CreateEventForm() {
             description: "",
             displayStartTime: "09:00",
             displayEndTime: "23:00",
+            timezone: systemTimezone,
             webhookUrl: "",
         },
     })
@@ -60,7 +67,9 @@ export function CreateEventForm() {
     // Submit Handler
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
         if (!selectedDates || selectedDates.length === 0) {
-            alert("日付を選択してください") // Or set a form error state
+            toast.error("日付を選択してください", {
+                description: "少なくとも1つの候補日が必要です"
+            })
             return
         }
 
@@ -73,19 +82,21 @@ export function CreateEventForm() {
         formData.append('displayStartTime', data.displayStartTime)
         formData.append('displayEndTime', data.displayEndTime)
         formData.append('slotInterval', slotInterval)
+        formData.append('timezone', data.timezone)
         if (data.webhookUrl) formData.append('webhookUrl', data.webhookUrl)
-        formData.append('selectedDates', JSON.stringify(selectedDates.map(d => d.toISOString())))
+        formData.append('selectedDates', JSON.stringify(selectedDates.map(d => format(d, 'yyyy-MM-dd'))))
 
         try {
             const res = await createEvent(null, formData)
             setResult(res)
             if (res.success) {
                 setIsOpen(true)
+                toast.success("イベントを作成しました！")
             } else if (res.error) {
-                alert(res.error)
+                toast.error("エラーが発生しました", { description: res.error })
             }
         } catch (e) {
-            alert("エラーが発生しました")
+            toast.error("不明なエラーが発生しました")
         } finally {
             setIsSubmitting(false)
         }
@@ -136,13 +147,38 @@ export function CreateEventForm() {
 
                 {/* Section 2: Date Selection */}
                 <Card className="shadow-sm border-slate-200">
-                    <CardHeader className="flex flex-row items-center space-y-0 gap-3 pb-2">
-                        <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
-                            <CalendarIcon className="h-5 w-5" />
+                    <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
+                        <div className="flex flex-row items-center gap-3">
+                            <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
+                                <CalendarIcon className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">候補日</CardTitle>
+                                <CardDescription>カレンダーをタップして選択（複数可）</CardDescription>
+                            </div>
                         </div>
-                        <div>
-                            <CardTitle className="text-lg">候補日</CardTitle>
-                            <CardDescription>カレンダーをタップして選択（複数可）</CardDescription>
+
+                        {/* Timezone Selector */}
+                        <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200 text-sm md:ml-auto">
+                            <Globe className="h-4 w-4 text-slate-400" />
+                            <Select
+                                defaultValue={systemTimezone}
+                                onValueChange={(val) => {
+                                    setValue('timezone', val)
+                                }}
+                            >
+                                <SelectTrigger className="h-8 border-none bg-transparent shadow-none focus:ring-0 w-[180px] text-xs font-medium text-slate-600">
+                                    <SelectValue placeholder="タイムゾーン" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[300px]">
+                                    {Intl.supportedValuesOf('timeZone').map((tz) => (
+                                        <SelectItem key={tz} value={tz} className="text-xs">
+                                            {tz.replace(/_/g, " ")}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <input type="hidden" {...register("timezone")} />
                         </div>
                     </CardHeader>
                     <CardContent className="flex flex-col items-center pt-4">
@@ -358,7 +394,10 @@ export function CreateEventForm() {
                                     value={`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/events/${result?.eventId}`}
                                     className="bg-slate-50 font-mono text-xs h-10"
                                 />
-                                <Button size="sm" variant="outline" className="h-10 px-4" onClick={() => navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/events/${result?.eventId}`)}>
+                                <Button size="sm" variant="outline" className="h-10 px-4" onClick={() => {
+                                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/events/${result?.eventId}`)
+                                    toast.success("URLをコピーしました")
+                                }}>
                                     コピー
                                 </Button>
                             </div>
@@ -374,7 +413,10 @@ export function CreateEventForm() {
                                     value={`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/events/${result?.eventId}?token=${result?.adminToken}`}
                                     className="bg-white border-pink-200 font-mono text-xs text-pink-700 font-bold h-10"
                                 />
-                                <Button size="sm" variant="outline" className="border-pink-200 text-pink-700 hover:bg-pink-100 h-10 px-4" onClick={() => navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/events/${result?.eventId}?token=${result?.adminToken}`)}>
+                                <Button size="sm" variant="outline" className="border-pink-200 text-pink-700 hover:bg-pink-100 h-10 px-4" onClick={() => {
+                                    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/events/${result?.eventId}?token=${result?.adminToken}`)
+                                    toast.success("管理者用URLをコピーしました", { description: "紛失しないようご注意ください" })
+                                }}>
                                     コピー
                                 </Button>
                             </div>
